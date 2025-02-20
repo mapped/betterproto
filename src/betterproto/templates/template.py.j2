@@ -32,7 +32,11 @@ class {{ enum.py_name }}(betterproto.Enum):
 {% endfor %}
 {% endif %}
 {% for message in output_file.messages %}
+{% if output_file.pydantic_dataclasses %}
+@dataclass(eq=False, repr=False, config={"extra": "forbid"})
+{% else %}
 @dataclass(eq=False, repr=False)
+{% endif %}
 class {{ message.py_name }}(betterproto.Message):
     {% if message.comment %}
 {{ message.comment }}
@@ -79,17 +83,17 @@ class {{ service.py_name }}Stub(betterproto.ServiceStub):
     {% for method in service.methods %}
     async def {{ method.py_name }}(self
         {%- if not method.client_streaming -%}
-            {%- if method.py_input_message -%}, {{ method.py_input_message_param }}: "{{ method.py_input_message_type }}"{%- endif -%}
+            , {{ method.py_input_message_param }}: "{{ method.py_input_message_type }}"
         {%- else -%}
             {# Client streaming: need a request iterator instead #}
-            , {{ method.py_input_message_param }}_iterator: {{ output_file.typing_compiler.union(output_file.typing_compiler.async_iterable(method.py_input_message_type), output_file.typing_compiler.iterable(method.py_input_message_type)) }}
+            , {{ method.py_input_message_param }}_iterator: "{{ output_file.typing_compiler.union(output_file.typing_compiler.async_iterable(method.py_input_message_type), output_file.typing_compiler.iterable(method.py_input_message_type)) }}"
         {%- endif -%}
             ,
             *
             , timeout: {{ output_file.typing_compiler.optional("float") }} = None
             , deadline: {{ output_file.typing_compiler.optional('"Deadline"') }} = None
             , metadata: {{ output_file.typing_compiler.optional('"MetadataLike"') }} = None
-            ) -> {% if method.server_streaming %}{{ output_file.typing_compiler.async_iterator(method.py_output_message_type ) }}{% else %}"{{ method.py_output_message_type }}"{% endif %}:
+            ) -> "{% if method.server_streaming %}{{ output_file.typing_compiler.async_iterator(method.py_output_message_type ) }}{% else %}{{ method.py_output_message_type }}{% endif %}":
         {% if method.comment %}
 {{ method.comment }}
 
@@ -148,6 +152,10 @@ class {{ service.py_name }}Stub(betterproto.ServiceStub):
     {% endfor %}
 {% endfor %}
 
+{% for i in output_file.imports_end %}
+{{ i }}
+{% endfor %}
+
 {% for service in output_file.services %}
 class {{ service.py_name }}Base(ServiceBase):
     {% if service.comment %}
@@ -158,7 +166,7 @@ class {{ service.py_name }}Base(ServiceBase):
     {% for method in service.methods %}
     async def {{ method.py_name }}(self
         {%- if not method.client_streaming -%}
-            {%- if method.py_input_message -%}, {{ method.py_input_message_param }}: "{{ method.py_input_message_type }}"{%- endif -%}
+            , {{ method.py_input_message_param }}: "{{ method.py_input_message_type }}"
         {%- else -%}
             {# Client streaming: need a request iterator instead #}
             , {{ method.py_input_message_param }}_iterator: {{ output_file.typing_compiler.async_iterator(method.py_input_message_type) }}
@@ -216,11 +224,3 @@ class {{ service.py_name }}Base(ServiceBase):
         }
 
 {% endfor %}
-
-{% if output_file.pydantic_dataclasses %}
-{% for message in output_file.messages %}
-{% if message.has_message_field %}
-rebuild_dataclass({{ message.py_name }})  # type: ignore
-{% endif %}
-{% endfor %}
-{% endif %}

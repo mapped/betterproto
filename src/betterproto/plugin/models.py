@@ -153,11 +153,33 @@ def get_comment(
 ) -> str:
     pad = " " * indent
     for sci_loc in proto_file.source_code_info.location:
-        if list(sci_loc.path) == path and sci_loc.leading_comments:
-            lines = sci_loc.leading_comments.strip().split("\n")
+        if list(sci_loc.path) == path:
+            all_comments = list(sci_loc.leading_detached_comments)
+            if sci_loc.leading_comments:
+                all_comments.append(sci_loc.leading_comments)
+            if sci_loc.trailing_comments:
+                all_comments.append(sci_loc.trailing_comments)
+
+            lines = []
+
+            for comment in all_comments:
+                lines += comment.split("\n")
+                lines.append("")
+
+            # Remove consecutive empty lines
+            lines = [
+                line for i, line in enumerate(lines) if line or (i == 0 or lines[i - 1])
+            ]
+
+            if lines and not lines[-1]:
+                lines.pop()  # Remove the last empty line
+
+            # It is common for one line comments to start with a space, for example: // comment
+            # We don't add this space to the generated file.
+            lines = [line[1:] if line and line[0] == " " else line for line in lines]
+
             # This is a field, message, enum, service, or method
             if len(lines) == 1 and len(lines[0]) < 79 - indent - 6:
-                lines[0] = lines[0].strip('"')
                 return f'{pad}"""{lines[0]}"""'
             else:
                 joined = f"\n{pad}".join(lines)
@@ -238,7 +260,7 @@ class OutputTemplate:
     parent_request: PluginRequestCompiler
     package_proto_obj: FileDescriptorProto
     input_files: List[str] = field(default_factory=list)
-    imports: Set[str] = field(default_factory=set)
+    imports_end: Set[str] = field(default_factory=set)
     datetime_imports: Set[str] = field(default_factory=set)
     pydantic_imports: Set[str] = field(default_factory=set)
     builtins_import: bool = False
@@ -327,12 +349,6 @@ class MessageCompiler(ProtoContentBase):
     @property
     def py_name(self) -> str:
         return pythonize_class_name(self.proto_name)
-
-    @property
-    def annotation(self) -> str:
-        if self.repeated:
-            return self.typing_compiler.list(self.py_name)
-        return self.py_name
 
     @property
     def deprecated_fields(self) -> Iterator[str]:
@@ -485,13 +501,6 @@ class FieldCompiler(MessageCompiler):
         return self.proto_obj.proto3_optional
 
     @property
-    def mutable(self) -> bool:
-        """True if the field is a mutable type, otherwise False."""
-        return self.annotation.startswith(
-            ("typing.List[", "typing.Dict[", "dict[", "list[", "Dict[", "List[")
-        )
-
-    @property
     def field_type(self) -> str:
         """String representation of proto field type."""
         return (
@@ -499,35 +508,6 @@ class FieldCompiler(MessageCompiler):
             .name.lower()
             .replace("type_", "")
         )
-
-    @property
-    def default_value_string(self) -> str:
-        """Python representation of the default proto value."""
-        if self.repeated:
-            return "[]"
-        if self.optional:
-            return "None"
-        if self.py_type == "int":
-            return "0"
-        if self.py_type == "float":
-            return "0.0"
-        elif self.py_type == "bool":
-            return "False"
-        elif self.py_type == "str":
-            return '""'
-        elif self.py_type == "bytes":
-            return 'b""'
-        elif self.field_type == "enum":
-            enum_proto_obj_name = self.proto_obj.type_name.split(".").pop()
-            enum = next(
-                e
-                for e in self.output_file.enums
-                if e.proto_obj.name == enum_proto_obj_name
-            )
-            return enum.default_value_string
-        else:
-            # Message type
-            return "None"
 
     @property
     def packed(self) -> bool:
@@ -561,7 +541,7 @@ class FieldCompiler(MessageCompiler):
             # Type referencing another defined Message or a named enum
             return get_type_reference(
                 package=self.output_file.package,
-                imports=self.output_file.imports,
+                imports=self.output_file.imports_end,
                 source_type=self.proto_obj.type_name,
                 typing_compiler=self.typing_compiler,
                 pydantic=self.output_file.pydantic_dataclasses,
@@ -687,17 +667,10 @@ class EnumDefinitionCompiler(MessageCompiler):
         ]
         super().__post_init__()  # call MessageCompiler __post_init__
 
-    @property
-    def default_value_string(self) -> str:
-        """Python representation of the default value for Enums.
-
-        As per the spec, this is the first value of the Enum.
-        """
-        return str(self.entries[0].value)  # ideally, should ALWAYS be int(0)!
-
 
 @dataclass
 class ServiceCompiler(ProtoContentBase):
+    source_file: FileDescriptorProto
     parent: OutputTemplate = PLACEHOLDER
     proto_obj: DescriptorProto = PLACEHOLDER
     path: List[int] = PLACEHOLDER
@@ -719,6 +692,7 @@ class ServiceCompiler(ProtoContentBase):
 
 @dataclass
 class ServiceMethodCompiler(ProtoContentBase):
+    source_file: FileDescriptorProto
     parent: ServiceCompiler
     proto_obj: MethodDescriptorProto
     path: List[int] = PLACEHOLDER
@@ -756,30 +730,6 @@ class ServiceMethodCompiler(ProtoContentBase):
         return f"/{package_part}{self.parent.proto_name}/{self.proto_name}"
 
     @property
-    def py_input_message(self) -> Optional[MessageCompiler]:
-        """Find the input message object.
-
-        Returns
-        -------
-        Optional[MessageCompiler]
-            Method instance representing the input message.
-            If not input message could be found or there are no
-            input messages, None is returned.
-        """
-        package, name = parse_source_type_name(self.proto_obj.input_type)
-
-        # Nested types are currently flattened without dots.
-        # Todo: keep a fully quantified name in types, that is
-        # comparable with method.input_type
-        for msg in self.request.all_messages:
-            if (
-                msg.py_name == pythonize_class_name(name.replace(".", ""))
-                and msg.output_file.package == package
-            ):
-                return msg
-        return None
-
-    @property
     def py_input_message_type(self) -> str:
         """String representation of the Python type corresponding to the
         input message.
@@ -791,7 +741,7 @@ class ServiceMethodCompiler(ProtoContentBase):
         """
         return get_type_reference(
             package=self.output_file.package,
-            imports=self.output_file.imports,
+            imports=self.output_file.imports_end,
             source_type=self.proto_obj.input_type,
             typing_compiler=self.output_file.typing_compiler,
             unwrap=False,
@@ -821,7 +771,7 @@ class ServiceMethodCompiler(ProtoContentBase):
         """
         return get_type_reference(
             package=self.output_file.package,
-            imports=self.output_file.imports,
+            imports=self.output_file.imports_end,
             source_type=self.proto_obj.output_type,
             typing_compiler=self.output_file.typing_compiler,
             unwrap=False,

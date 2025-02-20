@@ -1,5 +1,4 @@
 import asyncio
-import sys
 import uuid
 
 import grpclib
@@ -27,12 +26,12 @@ async def _test_client(client: ThingServiceClient, name="clean room", **kwargs):
 
 def _assert_request_meta_received(deadline, metadata):
     def server_side_test(stream):
-        assert stream.deadline._timestamp == pytest.approx(
-            deadline._timestamp, 1
-        ), "The provided deadline should be received serverside"
-        assert (
-            stream.metadata["authorization"] == metadata["authorization"]
-        ), "The provided authorization metadata should be received serverside"
+        assert stream.deadline._timestamp == pytest.approx(deadline._timestamp, 1), (
+            "The provided deadline should be received serverside"
+        )
+        assert stream.metadata["authorization"] == metadata["authorization"], (
+            "The provided authorization metadata should be received serverside"
+        )
 
     return server_side_test
 
@@ -91,9 +90,6 @@ async def test_trailer_only_error_stream_unary(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    sys.version_info < (3, 8), reason="async mock spy does works for python3.8+"
-)
 async def test_service_call_mutable_defaults(mocker):
     async with ChannelFor([ThingService()]) as channel:
         client = ThingServiceClient(channel)
@@ -269,9 +265,9 @@ async def test_async_gen_for_stream_stream_request():
             else:
                 # No more things to send make sure channel is closed
                 request_chan.close()
-        assert response_index == len(
-            expected_things
-        ), "Didn't receive all expected responses"
+        assert response_index == len(expected_things), (
+            "Didn't receive all expected responses"
+        )
 
 
 @pytest.mark.asyncio

@@ -66,8 +66,7 @@ if sys.version_info >= (3, 10):
     from types import UnionType as _types_UnionType
 else:
 
-    class _types_UnionType:
-        ...
+    class _types_UnionType: ...
 
 
 # Proto 3 data types
@@ -169,7 +168,22 @@ class Casing(builtin_enum.Enum):
     SNAKE = snake_case  #: A snake_case sterilization function.
 
 
-PLACEHOLDER: Any = object()
+class Placeholder:
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<PLACEHOLDER>"
+
+    def __copy__(self) -> Self:
+        return self
+
+    def __deepcopy__(self, _) -> Self:
+        return self
+
+
+# We can't simply use object() here because pydantic automatically performs deep-copy of mutable default values
+# See #606
+PLACEHOLDER: Any = Placeholder()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -206,7 +220,7 @@ def dataclass_field(
 ) -> dataclasses.Field:
     """Creates a dataclass field with attached protobuf metadata."""
     return dataclasses.field(
-        default=None if optional else PLACEHOLDER,
+        default=None if optional else PLACEHOLDER,  # type: ignore
         metadata={
             "betterproto": FieldMetadata(
                 number, proto_type, map_types, group, wraps, optional
@@ -1864,9 +1878,7 @@ class Message(ABC):
                 if getattr(values, field.name, None) is not None
             ]
 
-            if not set_fields:
-                raise ValueError(f"Group {group} has no value; all fields are None")
-            elif len(set_fields) > 1:
+            if len(set_fields) > 1:
                 set_fields_str = ", ".join(set_fields)
                 raise ValueError(
                     f"Group {group} has more than one value; fields {set_fields_str} are not None"
@@ -1999,10 +2011,10 @@ class _Timestamp(Timestamp):
             return f"{result}Z"
         if (nanos % 1e6) == 0:
             # Serialize 3 fractional digits.
-            return f"{result}.{int(nanos // 1e6) :03d}Z"
+            return f"{result}.{int(nanos // 1e6):03d}Z"
         if (nanos % 1e3) == 0:
             # Serialize 6 fractional digits.
-            return f"{result}.{int(nanos // 1e3) :06d}Z"
+            return f"{result}.{int(nanos // 1e3):06d}Z"
         # Serialize 9 fractional digits.
         return f"{result}.{nanos:09d}"
 

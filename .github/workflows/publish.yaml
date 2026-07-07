@@ -23,6 +23,7 @@ jobs:
         with:
           baseVersion: 1.0.0
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          releasesBranch: master
 
       - name: Install build deps
         run: pip install poetry

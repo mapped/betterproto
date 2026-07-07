@@ -214,7 +214,12 @@ def test_binary_compatibility(test_data: TestData) -> None:
         # Generally this can't be relied on, but here we are aiming to match the
         # existing Python implementation and aren't doing anything tricky.
         # https://developers.google.com/protocol-buffers/docs/encoding#implications
-        assert bytes(plugin_instance_from_json) == reference_binary_output
+        # For map fields, protobuf>=5 uses non-deterministic ordering, so we
+        # verify round-trip equivalence via decoded comparison instead of raw bytes.
+        plugin_from_json_reparse = plugin_module.Test.FromString(
+            bytes(plugin_instance_from_json)
+        )
+        assert plugin_from_json_reparse == plugin_instance_from_binary
         assert bytes(plugin_instance_from_binary) == reference_binary_output
 
         assert plugin_instance_from_json == plugin_instance_from_binary

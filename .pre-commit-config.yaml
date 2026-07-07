@@ -10,16 +10,3 @@ repos:
       - id: ruff
         args: ["--select", "I", "src", "tests"]
 
-  - repo: https://github.com/PyCQA/doc8
-    rev: 0.10.1
-    hooks:
-      - id: doc8
-        additional_dependencies:
-          - toml
-
-  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.14.0
-    hooks:
-      - id: pretty-format-java
-        args: [--autofix, --aosp]
-        files: ^.*\.java$

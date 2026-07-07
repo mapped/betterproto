@@ -35,9 +35,24 @@ jobs:
         run: poetry build
 
       - name: Publish to fury
+        shell: bash
+        env:
+          FURY_PUSH_TOKEN: ${{ secrets.FURY_PUSH_TOKEN }}
+          VERSION: ${{ steps.vtl.outputs.ver_semVerNoMetaPyPA }}
         run: |
-          VERSION="${{ steps.vtl.outputs.ver_semVerNoMetaPyPA }}"
-          curl -F "package=@dist/betterproto-${VERSION}-py3-none-any.whl" \
-            "https://${{ secrets.FURY_PUSH_TOKEN }}@push.fury.io/mapped/"
-          curl -F "package=@dist/betterproto-${VERSION}.tar.gz" \
-            "https://${{ secrets.FURY_PUSH_TOKEN }}@push.fury.io/mapped/"
+          set -euo pipefail
+          if [ -z "${FURY_PUSH_TOKEN}" ]; then
+            echo "::error::FURY_PUSH_TOKEN secret is not available to this repository."
+            echo "::error::Set it via: gh secret set FURY_PUSH_TOKEN --repo mapped/betterproto"
+            echo "::error::or have an org admin grant the mapped org secret access to this repo."
+            exit 1
+          fi
+          for artifact in \
+              "dist/betterproto-${VERSION}-py3-none-any.whl" \
+              "dist/betterproto-${VERSION}.tar.gz"; do
+            echo "Uploading ${artifact}..."
+            curl --fail-with-body --show-error --silent \
+              -F "package=@${artifact}" \
+              "https://${FURY_PUSH_TOKEN}@push.fury.io/mapped/"
+            echo
+          done

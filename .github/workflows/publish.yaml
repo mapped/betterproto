@@ -1,0 +1,42 @@
+name: publish
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Establish Versioning, Tags, and Labels
+        id: vtl
+        uses: mapped/action-vtl@latest
+        with:
+          baseVersion: 1.0.0
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install build deps
+        run: pip install poetry
+
+      - name: Set version
+        run: poetry version "${{ steps.vtl.outputs.ver_semVerNoMeta }}"
+
+      - name: Build
+        run: poetry build
+
+      - name: Publish to fury
+        run: |
+          VERSION="${{ steps.vtl.outputs.ver_semVerNoMeta }}"
+          curl -F "package=@dist/betterproto-${VERSION}-py3-none-any.whl" \
+            "https://${{ secrets.FURY_PUSH_TOKEN }}@push.fury.io/mapped/"
+          curl -F "package=@dist/betterproto-${VERSION}.tar.gz" \
+            "https://${{ secrets.FURY_PUSH_TOKEN }}@push.fury.io/mapped/"

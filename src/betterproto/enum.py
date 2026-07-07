@@ -154,6 +154,11 @@ class Enum(IntEnum if TYPE_CHECKING else int, metaclass=EnumType):
     def __deepcopy__(self, memo: Any) -> Self:
         return self
 
+    def __reduce__(self):
+        # Return a tuple that tells the unpickler how to rebuild the object.
+        # Here we use the class itself and the value needed to reconstruct it.
+        return (self.__class__, (self.value,))
+
     @classmethod
     def try_value(cls, value: int = 0) -> Self:
         """Return the value which corresponds to the value.

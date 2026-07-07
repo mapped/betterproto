@@ -12,14 +12,14 @@ license = "MIT"
 packages = [
     { include = "betterproto", from = "src" }
 ]
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.10,<4.0"
 dynamic = ["dependencies"]
 
 [tool.poetry.dependencies]
 # The Ruff version is pinned. To update it, also update it in .pre-commit-config.yaml
 ruff = { version = "~0.9.1", optional = true }
 grpclib = "^0.4.1"
-jinja2 = { version = ">=3.0.3", optional = true }
+jinja2 = { version = ">=3.1.6", optional = true }
 python-dateutil = "^2.8"
 typing-extensions = "^4.7.1"
 betterproto-rust-codec = { version = "0.1.1", optional = true }
@@ -27,7 +27,10 @@ betterproto-rust-codec = { version = "0.1.1", optional = true }
 [tool.poetry.group.dev.dependencies]
 asv = "^0.6.4"
 bpython = "^0.24"
-jinja2 = ">=3.0.3"
+jinja2 = ">=3.1.6"
+requests = ">=2.33.0"
+urllib3 = ">=2.7.0"
+setuptools = ">=78.1.1"
 mypy = "^1.11.2"
 sphinx = "7.4.7"
 sphinx-rtd-theme = "3.0.2"
@@ -37,12 +40,12 @@ tox = "^4.0.0"
 
 [tool.poetry.group.test.dependencies]
 poethepoet = ">=0.9.0"
-pytest = "^7.4.4"
-pytest-asyncio = "^0.23.8"
+pytest = ">=9.0.3"
+pytest-asyncio = ">=0.24.0"
 pytest-cov = "^6.0.0"
 pytest-mock = "^3.1.1"
 pydantic = ">=2.0,<3"
-protobuf = "^5"
+protobuf = ">=5.29.6"
 cachelib = "^0.13.0"
 tomlkit = ">=0.7.0"
 

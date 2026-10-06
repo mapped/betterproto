@@ -40,7 +40,7 @@ grpcio-tools = "^1.54.2"
 tox = "^4.0.0"
 idna = ">=3.15"
 Pygments = ">=2.20.0"
-virtualenv = ">=20.36.1"
+virtualenv = ">=21.7.13"
 filelock = ">=3.20.3"
 
 [tool.poetry.group.test.dependencies]

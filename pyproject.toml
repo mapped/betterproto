@@ -12,7 +12,7 @@ license = "MIT"
 packages = [
     { include = "betterproto", from = "src" }
 ]
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11.5,<4.0"
 dynamic = ["dependencies"]
 
 [tool.poetry.dependencies]
@@ -41,7 +41,7 @@ tox = "^4.0.0"
 idna = ">=3.15"
 Pygments = ">=2.20.0"
 virtualenv = ">=21.14.13"
-filelock = ">=3.20.3"
+filelock = ">=4.2.1"
 
 [tool.poetry.group.test.dependencies]
 poethepoet = ">=0.9.0"
@@ -160,8 +160,8 @@ requires =
     tox-poetry-installer[poetry]==1.0.0b1
 env_list =
     py311
-    py38
-    py37
+    py312
+    py313
 
 [testenv]
 commands =

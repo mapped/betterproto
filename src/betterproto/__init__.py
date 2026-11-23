@@ -1981,6 +1981,9 @@ class _Timestamp(Timestamp):
         # manual epoch offset calulation to avoid rounding errors,
         # to support negative timestamps (before 1970) and skirt
         # around datetime bugs (apparently 0 isn't a year in [0, 9999]??)
+        if dt.tzinfo is None:
+            # Naive datetimes are UTC, as in timestamp_to_json (pymongo returns them).
+            dt = dt.replace(tzinfo=timezone.utc)
         offset = dt - DATETIME_ZERO
         # below is the same as timedelta.total_seconds() but without dividing by 1e6
         # so we end up with microseconds as integers instead of seconds as float

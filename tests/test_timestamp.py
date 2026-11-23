@@ -25,3 +25,12 @@ def test_timestamp_to_datetime_and_back(dt: datetime):
     and then back again ends up with the same datetime.
     """
     assert _Timestamp.from_datetime(dt).to_datetime() == dt
+
+
+def test_timestamp_from_naive_datetime_is_utc():
+    naive = datetime(2023, 10, 11, 9, 41, 12, 5)
+
+    ts = _Timestamp.from_datetime(naive)
+
+    assert ts == _Timestamp.from_datetime(naive.replace(tzinfo=timezone.utc))
+    assert ts.to_datetime() == naive.replace(tzinfo=timezone.utc)

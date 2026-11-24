@@ -23,3 +23,15 @@ enum ArithmeticOperator {
     ARITHMETIC_OPERATOR_MINUS = 2;
     ARITHMETIC_OPERATOR_0_PREFIXED = 3;
 }
+
+enum PurgeData {
+    PURGE_DATA_UNSPECIFIED = 0;
+    PURGE_DATA = 1;
+    DO_NOT_PURGE_DATA = 2;
+}
+
+enum PropertyKey {
+    PROPERTY_KEY_UNSPECIFIED = 0;
+    NAME = 1;
+    EXTENDED_PROPERTY_KEY = 131;
+}

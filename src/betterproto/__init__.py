@@ -1154,8 +1154,37 @@ class Message(ABC):
     def __getstate__(self) -> bytes:
         return bytes(self)
 
-    def __setstate__(self: T, pickled_bytes: bytes) -> T:
-        return self.parse(pickled_bytes)
+    def __setstate__(self: T, state: Union[bytes, Dict[str, Any]]) -> T:
+        if isinstance(state, dict):
+            return self._set_legacy_state(state)
+        return self.parse(state)
+
+    def _set_legacy_state(self: T, state: Dict[str, Any]) -> T:
+        """Restore a message pickled by betterproto 2.0.0b6 or earlier.
+
+        Those versions had no ``__reduce__``, so a message was pickled as its
+        ``__dict__``. Unset fields held the ``PLACEHOLDER`` sentinel, which
+        unpickles as a bare ``object()``, and every member of a oneof was stored,
+        not just the selected one.
+        """
+        group_current = state.get("_group_current") or {}
+        kwargs = {}
+        for name, meta in self._betterproto.meta_by_field_name.items():
+            if name not in state:
+                continue
+            value = state[name]
+            if value is PLACEHOLDER or type(value) in (object, Placeholder):
+                continue
+            if meta.group and group_current.get(meta.group) != name:
+                continue
+            kwargs[name] = value
+        restored = self.__class__(**kwargs)
+        own_dict = object.__getattribute__(self, "__dict__")
+        own_dict.update(object.__getattribute__(restored, "__dict__"))
+        own_dict["_unknown_fields"] = state.get("_unknown_fields") or b""
+        if "_serialized_on_wire" in state:
+            own_dict["_serialized_on_wire"] = state["_serialized_on_wire"]
+        return self
 
     def __reduce__(self) -> Tuple[Any, ...]:
         return (self.__class__.FromString, (bytes(self),))

@@ -1,10 +1,14 @@
 from tests.output_betterproto.enum import (
     ArithmeticOperator,
     Choice,
+    PropertyKey,
+    PurgeData,
     Test,
 )
 from tests.output_betterproto_pydantic.enum import (
     Choice as ChoicePyd,
+    PropertyKey as PropertyKeyPyd,
+    PurgeData as PurgeDataPyd,
     Test as TestPyd,
 )
 
@@ -121,3 +125,19 @@ def test_renamed_enum_members():
 def test_pydantic_enum_preserve_type():
     test = TestPyd(choice=ChoicePyd.ZERO)
     assert isinstance(test.choice, ChoicePyd)
+
+
+def test_members_named_like_their_enum_keep_their_full_name():
+    for purge_data in (PurgeData, PurgeDataPyd):
+        assert [(member.name, member.value) for member in purge_data] == [
+            ("UNSPECIFIED", 0),
+            ("PURGE_DATA", 1),
+            ("DO_NOT_PURGE_DATA", 2),
+        ]
+        assert purge_data(1).name == "PURGE_DATA"
+        assert purge_data(2).name == "DO_NOT_PURGE_DATA"
+
+    for property_key in (PropertyKey, PropertyKeyPyd):
+        assert property_key(131) is property_key.EXTENDED_PROPERTY_KEY
+        assert property_key(1) is property_key.NAME
+        assert property_key(0) is property_key.UNSPECIFIED

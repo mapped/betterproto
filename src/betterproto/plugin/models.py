@@ -71,7 +71,7 @@ from ..compile.importing import (
 )
 from ..compile.naming import (
     pythonize_class_name,
-    pythonize_enum_member_name,
+    pythonize_enum_member_names,
     pythonize_field_name,
     pythonize_method_name,
 )
@@ -653,17 +653,21 @@ class EnumDefinitionCompiler(MessageCompiler):
 
     def __post_init__(self) -> None:
         # Get entries/allowed values for this Enum
+        names = pythonize_enum_member_names(
+            self.proto_obj.name,
+            [(value.name, value.number) for value in self.proto_obj.value],
+        )
         self.entries = [
             self.EnumEntry(
-                name=pythonize_enum_member_name(
-                    entry_proto_value.name, self.proto_obj.name
-                ),
+                name=name,
                 value=entry_proto_value.number,
                 comment=get_comment(
                     proto_file=self.source_file, path=self.path + [2, entry_number]
                 ),
             )
-            for entry_number, entry_proto_value in enumerate(self.proto_obj.value)
+            for entry_number, (entry_proto_value, name) in enumerate(
+                zip(self.proto_obj.value, names)
+            )
         ]
         super().__post_init__()  # call MessageCompiler __post_init__
 

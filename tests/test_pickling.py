@@ -11,6 +11,7 @@ from typing import (
 from unittest.mock import ANY
 
 import cachelib
+import pytest
 
 import betterproto
 from betterproto.lib.google import protobuf as google
@@ -270,3 +271,55 @@ def test_unpickle_legacy_dict_state_keeps_unknown_fields():
 
     assert msg.bar == 12
     assert bytes(msg) == bytes(PickledMessage(bar=12)) + unknown
+
+
+class LegacyColour(betterproto.Enum):
+    RED = 1
+    GREEN = 2
+
+
+def _legacy_enum_pickle(enum_cls, value, pickled_name):
+    """Opcodes betterproto 2.0.0b7 wrote for an enum member: NEWOBJ(cls, (value,)) then BUILD(__dict__)."""
+
+    def text(s):
+        b = s.encode()
+        return pickle.SHORT_BINUNICODE + bytes([len(b)]) + b
+
+    return b"".join(
+        [
+            pickle.PROTO + b"\x04",
+            text(enum_cls.__module__),
+            text(enum_cls.__qualname__),
+            pickle.STACK_GLOBAL,
+            pickle.BININT1 + bytes([value]),
+            pickle.TUPLE1,
+            pickle.NEWOBJ,
+            pickle.EMPTY_DICT,
+            pickle.MARK,
+            text("name"),
+            text(pickled_name),
+            text("value"),
+            pickle.BININT1 + bytes([value]),
+            pickle.SETITEMS,
+            pickle.BUILD,
+            pickle.STOP,
+        ]
+    )
+
+
+def test_unpickle_legacy_enum_member():
+    member = pickle.loads(_legacy_enum_pickle(LegacyColour, 2, "GREEN"))
+
+    assert member is LegacyColour.GREEN
+
+
+def test_unpickle_legacy_enum_member_keeps_current_name():
+    member = pickle.loads(_legacy_enum_pickle(LegacyColour, 1, "COLOUR_RED"))
+
+    assert member is LegacyColour.RED
+    assert member.name == "RED"
+
+
+def test_unpickle_legacy_enum_unknown_value_raises():
+    with pytest.raises(ValueError):
+        pickle.loads(_legacy_enum_pickle(LegacyColour, 9, "GONE"))

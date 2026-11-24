@@ -126,11 +126,19 @@ class Enum(IntEnum if TYPE_CHECKING else int, metaclass=EnumType):
 
     if not TYPE_CHECKING:
 
-        def __new__(cls, *, name: Optional[str], value: int) -> Self:
+        def __new__(cls, *args: int, **kwargs: Any) -> Self:
+            if args:
+                (value,) = args
+                return cls(value)
+            name: Optional[str] = kwargs["name"]
+            value = kwargs["value"]
             self = super().__new__(cls, value)
             super().__setattr__(self, "name", name)
             super().__setattr__(self, "value", value)
             return self
+
+        def __setstate__(self, state: Any) -> None:
+            pass
 
     def __str__(self) -> str:
         return self.name or "None"

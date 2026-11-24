@@ -11,6 +11,7 @@ from typing import (
 from unittest.mock import ANY
 
 import cachelib
+import pytest
 
 import betterproto
 from betterproto.lib.google import protobuf as google
@@ -201,3 +202,124 @@ def test_message_can_be_cached():
             .string_value
             == "world"
         )
+
+
+class _LegacyPickled:
+    """Pickles like betterproto 2.0.0b6 and earlier, which had no ``__reduce__``.
+
+    The message class is created without ``__init__`` and its ``__dict__`` is
+    passed to ``__setstate__``. Unset fields hold the ``PLACEHOLDER`` sentinel,
+    which was a bare ``object()``.
+    """
+
+    def __init__(self, cls, fields, group_current=None, unknown_fields=b""):
+        self.cls = cls
+        self.state = {
+            **{name: object() for name in cls._betterproto.meta_by_field_name},
+            **fields,
+            "_serialized_on_wire": True,
+            "_unknown_fields": unknown_fields,
+            "_group_current": group_current or {},
+        }
+
+    def __reduce__(self):
+        return (_new_without_init, (self.cls,), self.state)
+
+
+def _new_without_init(cls):
+    return cls.__new__(cls)
+
+
+def test_unpickle_legacy_dict_state():
+    legacy = _LegacyPickled(
+        Complex,
+        {"foo_str": "yep", "fe": _LegacyPickled(Fe, {"abc": "1"})},
+        group_current={"grp": "fe"},
+    )
+
+    msg = pickle.loads(pickle.dumps(legacy))
+
+    assert type(msg) is Complex
+    assert msg == Complex(foo_str="yep", fe=Fe(abc="1"))
+    assert bytes(msg) == bytes(Complex(foo_str="yep", fe=Fe(abc="1")))
+    assert betterproto.which_one_of(msg, "grp") == ("fe", Fe(abc="1"))
+    assert msg.nested_data == NestedData()
+    assert unpickled(msg) == msg
+
+
+def test_unpickle_legacy_dict_state_ignores_unselected_oneof_members():
+    legacy = _LegacyPickled(
+        Complex,
+        {
+            "fe": _LegacyPickled(Fe, {"abc": "1"}),
+            "fi": _LegacyPickled(Fi, {"abc": "stale"}),
+        },
+        group_current={"grp": "fe"},
+    )
+
+    msg = pickle.loads(pickle.dumps(legacy))
+
+    assert betterproto.which_one_of(msg, "grp") == ("fe", Fe(abc="1"))
+    assert not msg.is_set("fi")
+
+
+def test_unpickle_legacy_dict_state_keeps_unknown_fields():
+    unknown = bytes([0x50, 0x01])  # field 10, varint 1
+    legacy = _LegacyPickled(PickledMessage, {"bar": 12}, unknown_fields=unknown)
+
+    msg = pickle.loads(pickle.dumps(legacy))
+
+    assert msg.bar == 12
+    assert bytes(msg) == bytes(PickledMessage(bar=12)) + unknown
+
+
+class LegacyColour(betterproto.Enum):
+    RED = 1
+    GREEN = 2
+
+
+def _legacy_enum_pickle(enum_cls, value, pickled_name):
+    """Opcodes betterproto 2.0.0b7 wrote for an enum member: NEWOBJ(cls, (value,)) then BUILD(__dict__)."""
+
+    def text(s):
+        b = s.encode()
+        return pickle.SHORT_BINUNICODE + bytes([len(b)]) + b
+
+    return b"".join(
+        [
+            pickle.PROTO + b"\x04",
+            text(enum_cls.__module__),
+            text(enum_cls.__qualname__),
+            pickle.STACK_GLOBAL,
+            pickle.BININT1 + bytes([value]),
+            pickle.TUPLE1,
+            pickle.NEWOBJ,
+            pickle.EMPTY_DICT,
+            pickle.MARK,
+            text("name"),
+            text(pickled_name),
+            text("value"),
+            pickle.BININT1 + bytes([value]),
+            pickle.SETITEMS,
+            pickle.BUILD,
+            pickle.STOP,
+        ]
+    )
+
+
+def test_unpickle_legacy_enum_member():
+    member = pickle.loads(_legacy_enum_pickle(LegacyColour, 2, "GREEN"))
+
+    assert member is LegacyColour.GREEN
+
+
+def test_unpickle_legacy_enum_member_keeps_current_name():
+    member = pickle.loads(_legacy_enum_pickle(LegacyColour, 1, "COLOUR_RED"))
+
+    assert member is LegacyColour.RED
+    assert member.name == "RED"
+
+
+def test_unpickle_legacy_enum_unknown_value_raises():
+    with pytest.raises(ValueError):
+        pickle.loads(_legacy_enum_pickle(LegacyColour, 9, "GONE"))
